@@ -1,0 +1,14 @@
+interface logging {
+    variant request {
+        log(list<u8>),
+    }
+
+    variant response {
+        log(result<_, string>),
+    }
+}
+
+world logging-sys-v0 {
+    import logging;
+    include process-v0;
+}
