@@ -106,7 +106,8 @@ fn handle_logging_request(
         LoggingRequest::Log(ref log) => {
             let mut log: serde_json::Value = serde_json::from_slice(log)?;
             log["source"] = serde_json::json!(source);
-            let log = serde_json::to_vec(&log).unwrap();
+            let mut log = serde_json::to_vec(&log).unwrap();
+            log.push(10); // add `\n`
             let log_file = state.log_files.entry(source.clone()).or_insert_with(|| {
                 let log_dir_path = format!("{}/{}", state.drive_path, source.package_id());
                 let _log_dir = open_dir(&log_dir_path, true, None).expect("failed to open log dir");
@@ -143,7 +144,7 @@ fn handle_internal_request(
 
 fn handle_message(our: &Address, message: &Message, state: &mut State) -> Result<()> {
     if !message.is_request() {
-        return Err(anyhow!("unexpected Response: {:?}", message));
+        return Ok(());
     }
     let source = message.source();
     if let Some(ref failure_message) = is_node_allowed(source, state) {
