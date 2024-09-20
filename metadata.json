@@ -1,18 +1,18 @@
 {
     "name": "logging",
-    "description": "",
-    "image": "",
+    "description": "dev tool: aggregate logs from users of your beta p2p app",
+    "image": "https://raw.githubusercontent.com/nick1udwig/logging/master/assets/logging270.png",
     "properties": {
         "package_name": "logging",
         "current_version": "0.1.0",
         "publisher": "nick.kino",
-        "mirrors": [],
+        "mirrors": ["nickludwig.os", "nick1udwig.os", "diligence.os"],
         "code_hashes": {
-            "0.1.0": ""
+            "0.1.0": "6b9ba1b66c2d177ecdd408b88e4c349cc6aca52d164add58b60bab911342f1e6"
         },
         "wit_version": 0,
         "dependencies": []
     },
-    "external_url": "",
+    "external_url": "https://github.com/nick1udwig/logging",
     "animation_url": ""
 }
