@@ -10,5 +10,5 @@ interface logging {
 
 world logging-sys-v0 {
     import logging;
-    include process-v0;
+    include process-v1;
 }
