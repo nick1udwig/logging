@@ -2,14 +2,16 @@ use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, Result};
 
-use crate::kinode::process::logging::Request as LoggingRequest;
-use kinode_process_lib::logging::{error, info, init_logging, Level};
-use kinode_process_lib::vfs::{create_drive, open_dir, open_file, File};
-use kinode_process_lib::{await_message, call_init, Address, Message, PackageId};
+use crate::hyperware::process::logging::Request as LoggingRequest;
+use hyperware_process_lib::logging::{error, info, init_logging, warn, Level};
+use hyperware_process_lib::vfs::{create_drive, open_dir, open_file, File};
+use hyperware_process_lib::{
+    await_message, call_init, get_state, set_state, Address, Message, PackageId,
+};
 
 wit_bindgen::generate!({
-    path: "target/wit",
-    world: "logging-sys-v0",
+    path: "../target/wit",
+    world: "logging-nick-dot-hypr-v0",
     generate_unused_types: true,
     additional_derives: [serde::Deserialize, serde::Serialize, process_macros::SerdeJsonInto],
 });
@@ -40,6 +42,7 @@ enum InternalRequest {
 /// allowed_packages : packages to log for; empty -> all
 /// whitelist        : nodes to log for; empty -> all
 /// blacklist        : nodes to NOT log for; empty -> all
+#[derive(serde::Deserialize, serde::Serialize)]
 struct State {
     drive_path: String,
     log_files: Files,
@@ -56,6 +59,26 @@ impl State {
             allowed_packages: HashSet::new(),
             whitelist: HashSet::new(),
             blacklist: HashSet::new(),
+        }
+    }
+
+    fn load(drive_path: String) -> Self {
+        match get_state() {
+            None => Self::new(drive_path),
+            Some(ref state_bytes) => match serde_json::from_slice(state_bytes) {
+                Ok(state) => state,
+                Err(e) => {
+                    warn!("failed to deserialize saved state: {e:?}");
+                    Self::new(drive_path)
+                }
+            },
+        }
+    }
+
+    fn save(&self) {
+        match serde_json::to_vec(self) {
+            Ok(ref state_bytes) => set_state(state_bytes),
+            Err(e) => error!("failed to serialize state: {e:?}"),
         }
     }
 }
@@ -104,10 +127,13 @@ fn handle_logging_request(
 ) -> Result<()> {
     match request {
         LoggingRequest::Log(ref log) => {
-            let mut log: serde_json::Value = serde_json::from_slice(log)?;
+            let number_log_files = state.log_files.len();
+
+            let mut log: serde_json::Value = serde_json::from_str(log)?;
             log["source"] = serde_json::json!(source);
             let mut log = serde_json::to_vec(&log).unwrap();
             log.push(10); // add `\n`
+                          //
             let log_file = state.log_files.entry(source.clone()).or_insert_with(|| {
                 let log_dir_path = format!("{}/{}", state.drive_path, source.package_id());
                 let _log_dir = open_dir(&log_dir_path, true, None).expect("failed to open log dir");
@@ -115,6 +141,10 @@ fn handle_logging_request(
                 open_file(&log_file_path, true, None).expect("failed to open log file")
             });
             log_file.append(&log)?;
+
+            if number_log_files != state.log_files.len() {
+                state.save();
+            }
         }
     }
     Ok(())
@@ -139,6 +169,7 @@ fn handle_internal_request(
         InternalRequest::BlacklistNode(node) => state.blacklist.insert(node),
         InternalRequest::UnblacklistNode(ref node) => state.blacklist.remove(node),
     };
+    state.save();
     Ok(())
 }
 
@@ -165,19 +196,20 @@ fn handle_message(our: &Address, message: &Message, state: &mut State) -> Result
 
 call_init!(init);
 fn init(our: Address) {
-    init_logging(&our, Level::DEBUG, Level::INFO, None, None).unwrap();
+    init_logging(Level::DEBUG, Level::INFO, None, None, None).unwrap();
     info!("begin");
-    let drive_path = create_drive(our.package_id(), "remote_log", None).unwrap();
+    let drive_path = create_drive(our.package_id(), "remote-log", None).unwrap();
 
-    let mut state = State::new(drive_path);
+    let mut state = State::load(drive_path);
 
     loop {
         match await_message() {
             Err(send_error) => error!("got SendError: {send_error}"),
-            Ok(ref message) => match handle_message(&our, message, &mut state) {
-                Ok(_) => {}
-                Err(e) => error!("got error while handling message: {e:?}"),
-            },
+            Ok(ref message) => {
+                if let Err(e) = handle_message(&our, message, &mut state) {
+                    error!("got error while handling message: {e:?}");
+                }
+            }
         }
     }
 }

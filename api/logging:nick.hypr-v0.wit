@@ -1,6 +1,6 @@
 interface logging {
     variant request {
-        log(list<u8>),
+        log(string),
     }
 
     variant response {
@@ -8,7 +8,7 @@ interface logging {
     }
 }
 
-world logging-sys-v0 {
+world logging-nick-dot-hypr-v0 {
     import logging;
     include process-v1;
 }
